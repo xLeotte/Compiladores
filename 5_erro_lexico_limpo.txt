@@ -1,0 +1,18 @@
+ç@ 
+  Arquivo de teste: 5_erro_lexico_limpo.txt
+  Este arquivo deve ser utilizado para validar o tratamento de exceções.
+@ç
+
+int main() {
+    int contador;
+    int 5_posicao;
+    float cálculo_total;
+
+    contador = 10;
+
+    if (contador ? 5) {
+        print(contador);
+    }
+
+    return 0;
+}
