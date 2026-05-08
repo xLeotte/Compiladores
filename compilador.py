@@ -832,7 +832,7 @@ if __name__ == "__main__":
             print(e)
         else:
             tokens_codigos, lexemas, linhas, _ = compilar(codigo, mostrar_tokens=True)
-            if tokens_codigos is not None:
+            if tokens_codigos is not None and lexemas is not None and linhas is not None:
                 try:
                     caminho_json = exportar_tokens_json(tokens_codigos, lexemas, linhas, arquivo_escolhido)
                     print(f"\n[3] Tokens exportados em JSON: {caminho_json.name}")
