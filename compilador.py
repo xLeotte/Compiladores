@@ -1,6 +1,7 @@
 """
 Compilador / Analisador Léxico e Sintático
 Linguagem: LangÇ# (baseada na gramática fornecida)
+Manual de referência: manual_langç.pdf
 
 Estrutura de transformação em um único arquivo:
 1. O programa localiza arquivos .txt na pasta do script.
@@ -125,6 +126,15 @@ class Lexer:
         p = self.pos + 1
         return self.fonte[p] if p < len(self.fonte) else '\0'
 
+    def _eh_inicio_identificador(self, c: str) -> bool:
+        return c == '_' or 'a' <= c <= 'z' or 'A' <= c <= 'Z'
+
+    def _eh_parte_identificador(self, c: str) -> bool:
+        return self._eh_inicio_identificador(c) or '0' <= c <= '9'
+
+    def _eh_digito(self, c: str) -> bool:
+        return '0' <= c <= '9'
+
     def _avanca(self) -> str:
         c = self._atual()
         self.pos += 1
@@ -148,30 +158,49 @@ class Lexer:
             c = self._atual()
             linha_atual = self.linha
 
-            if c.isalpha() or c == '_':
+            if self._eh_inicio_identificador(c):
                 lexeme = ''
-                while self._atual().isalnum() or self._atual() == '_':
+                while self._eh_parte_identificador(self._atual()):
                     lexeme += self._avanca()
+
+                if self._atual().isalpha():
+                    raise ErroLexico(
+                        f"Linha {linha_atual}: identificador contem caractere invalido '{self._atual()}'; use apenas letras ASCII, digitos e '_'"
+                    )
 
                 if len(lexeme) > 64:
                     raise ErroLexico(
-                        f"Linha {linha_atual}: identificador '{lexeme[:20]}…' excede 64 caracteres"
+                        f"Linha {linha_atual}: identificador '{lexeme[:20]}...' excede 64 caracteres"
                     )
 
                 tipo = KEYWORDS.get(lexeme, TokenType.ID)
                 self._adiciona_token(tipo, lexeme, linha_atual)
 
-            elif c.isdigit():
+            elif self._eh_digito(c):
                 lexeme = ''
-                while self._atual().isdigit():
+                while self._eh_digito(self._atual()):
                     lexeme += self._avanca()
 
-                if self._atual() == '.' and self._proximo().isdigit():
+                if self._atual() == '.':
+                    if not self._eh_digito(self._proximo()):
+                        raise ErroLexico(
+                            f"Linha {linha_atual}: numero real incompleto; esperado digito apos '.'"
+                        )
                     lexeme += self._avanca()
-                    while self._atual().isdigit():
+                    while self._eh_digito(self._atual()):
                         lexeme += self._avanca()
 
+                if self._eh_inicio_identificador(self._atual()) or self._atual().isalpha():
+                    raise ErroLexico(
+                        f"Linha {linha_atual}: identificador invalido iniciando com digito perto de '{lexeme}{self._atual()}'"
+                    )
+
                 self._adiciona_token(TokenType.NUM, lexeme, linha_atual)
+
+            elif c.isalpha():
+                raise ErroLexico(
+                    f"Linha {linha_atual}: identificador deve usar apenas letras ASCII; caractere invalido '{c}'"
+                )
 
             elif c == '=':
                 self._avanca()
@@ -278,10 +307,13 @@ class Lexer:
                             break
                         self._avanca()
                     if not fechado:
-                        print(f"Aviso: comentário de bloco iniciado na linha {linha_inicio} não foi fechado com '@ç'")
+                        raise ErroLexico(
+                            f"Linha {linha_inicio}: comentario de bloco nao foi fechado com '@ç'"
+                        )
                 else:
-                    print(f"Aviso: 'ç' encontrado na linha {self.linha}, esperado 'ç#' para comentário de linha ou 'ç@ ... @ç' para comentário de bloco")
-                    break
+                    raise ErroLexico(
+                        f"Linha {self.linha}: esperado 'ç#' para comentario de linha ou 'ç@ ... @ç' para comentario de bloco"
+                    )
             else:
                 break
 
@@ -301,6 +333,11 @@ class Parser:
     def __init__(self, tokens: list[Token]):
         self.tokens = tokens
         self.pos = 0
+        self.tem_main = False
+        self.funcoes: dict[str, tuple[TokenType, list[TokenType]]] = self._coletar_assinaturas_funcoes()
+        self.funcoes_definidas: set[str] = set()
+        self.escopos: list[dict[str, TokenType]] = []
+        self.tipo_retorno_atual: TokenType | None = None
 
     @property
     def atual(self) -> Token:
@@ -398,6 +435,91 @@ class Parser:
     def _verifica(self, *tipos: TokenType) -> bool:
         return self.atual.tipo in tipos
 
+    def _coletar_assinaturas_funcoes(self) -> dict[str, tuple[TokenType, list[TokenType]]]:
+        assinaturas = {}
+
+        i = 0
+        while i < len(self.tokens) - 2:
+            if (
+                self.tokens[i].tipo in (TokenType.INT, TokenType.FLOAT)
+                and self.tokens[i + 1].tipo == TokenType.ID
+                and self.tokens[i + 2].tipo == TokenType.LPAREN
+            ):
+                tipo_retorno = self.tokens[i].tipo
+                nome = self.tokens[i + 1].valor
+                parametros = []
+                i += 3
+
+                while i < len(self.tokens) and self.tokens[i].tipo != TokenType.RPAREN:
+                    if self.tokens[i].tipo in (TokenType.INT, TokenType.FLOAT):
+                        parametros.append(self.tokens[i].tipo)
+                        i += 2
+                        if i < len(self.tokens) and self.tokens[i].tipo == TokenType.COMMA:
+                            i += 1
+                            continue
+                    else:
+                        break
+
+                assinaturas[nome] = (tipo_retorno, parametros)
+            i += 1
+
+        return assinaturas
+
+    def _abrir_escopo(self):
+        self.escopos.append({})
+
+    def _fechar_escopo(self):
+        self.escopos.pop()
+
+    def _declarar_variavel(self, token: Token, tipo: TokenType):
+        escopo_atual = self.escopos[-1]
+        if token.valor in escopo_atual:
+            raise ErroSintatico(
+                f"Linha {token.linha}: identificador '{token.valor}' ja declarado neste escopo"
+            )
+        escopo_atual[token.valor] = tipo
+
+    def _buscar_variavel(self, token: Token) -> TokenType:
+        for escopo in reversed(self.escopos):
+            if token.valor in escopo:
+                return escopo[token.valor]
+
+        raise ErroSintatico(
+            f"Linha {token.linha}: variavel '{token.valor}' usada antes da declaracao"
+        )
+
+    def _verificar_funcao_declarada(self, token: Token):
+        if token.valor not in self.funcoes:
+            raise ErroSintatico(
+                f"Linha {token.linha}: funcao '{token.valor}' nao declarada"
+            )
+
+    def _tipo_nome(self, tipo: TokenType) -> str:
+        if tipo == TokenType.INT:
+            return "int"
+        if tipo == TokenType.FLOAT:
+            return "float"
+        return tipo.name
+
+    def _verificar_tipos_compativeis(self, esperado: TokenType, recebido: TokenType, token: Token, contexto: str):
+        if esperado != recebido:
+            raise ErroSintatico(
+                f"Linha {token.linha}: tipo incompativel em {contexto}; esperado {self._tipo_nome(esperado)}, recebido {self._tipo_nome(recebido)}"
+            )
+
+    def _tipo_operacao_numerica(self, esquerdo: TokenType, direito: TokenType, token: Token) -> TokenType:
+        tipos_numericos = {TokenType.INT, TokenType.FLOAT}
+
+        if esquerdo not in tipos_numericos or direito not in tipos_numericos:
+            raise ErroSintatico(
+                f"Linha {token.linha}: operador aritmetico exige operandos numericos"
+            )
+
+        if TokenType.FLOAT in (esquerdo, direito):
+            return TokenType.FLOAT
+
+        return TokenType.INT
+
     def _primeiro_tipo(self):
         return self._verifica(TokenType.INT, TokenType.FLOAT)
 
@@ -414,7 +536,9 @@ class Parser:
     def programa(self):
         self._function_list()
         self._consome(TokenType.EOF)
-        print("✔  Análise sintática concluída sem erros.")
+        if not self.tem_main:
+            raise ErroSintatico("Programa invalido: a funcao main e obrigatoria como ponto de entrada.")
+        print("OK  Analise sintatica concluida sem erros.")
 
     def _function_list(self):
         self._function()
@@ -426,8 +550,17 @@ class Parser:
             self._function_list_prime()
 
     def _function(self):
-        self._type()
-        self._consome(TokenType.ID)
+        tipo_retorno = self._type()
+        nome_funcao = self._consome(TokenType.ID)
+        if nome_funcao.valor == "main":
+            self.tem_main = True
+
+        if nome_funcao.valor in self.funcoes_definidas:
+            raise ErroSintatico(
+                f"Linha {nome_funcao.linha}: funcao '{nome_funcao.valor}' ja declarada"
+            )
+        self.funcoes_definidas.add(nome_funcao.valor)
+        self.tipo_retorno_atual = tipo_retorno
 
         # No nível global, a gramática aceita apenas funções.
         # Isso evita uma mensagem pouco útil quando aparece algo como:
@@ -438,9 +571,12 @@ class Parser:
             )
 
         self._consome(TokenType.LPAREN)
+        self._abrir_escopo()
         self._param_list_opt()
         self._consome(TokenType.RPAREN)
-        self._block()
+        self._block(criar_escopo=False)
+        self._fechar_escopo()
+        self.tipo_retorno_atual = None
 
     def _param_list_opt(self):
         if self._primeiro_tipo():
@@ -457,10 +593,14 @@ class Parser:
             self._param_list_prime()
 
     def _param(self):
-        self._type()
-        self._consome(TokenType.ID)
+        tipo = self._type()
+        identificador = self._consome(TokenType.ID)
+        self._declarar_variavel(identificador, tipo)
 
-    def _block(self):
+    def _block(self, criar_escopo: bool = True):
+        if criar_escopo:
+            self._abrir_escopo()
+
         self._consome(TokenType.LBRACE)
         self._decl_list_opt()
         self._stmt_list_opt()
@@ -474,6 +614,9 @@ class Parser:
             )
 
         self._consome(TokenType.RBRACE)
+
+        if criar_escopo:
+            self._fechar_escopo()
 
     def _decl_list_opt(self):
         # Dentro de bloco, qualquer token de tipo (int/float) inicia declaração.
@@ -506,8 +649,9 @@ class Parser:
             self._decl_list_prime()
 
     def _var_decl(self):
-        self._type()
-        self._consome(TokenType.ID)
+        tipo = self._type()
+        identificador = self._consome(TokenType.ID)
+        self._declarar_variavel(identificador, tipo)
         self._consome(TokenType.SEMICOLON)
 
     def _stmt_list_opt(self):
@@ -543,14 +687,28 @@ class Parser:
             )
 
     def _assign_stmt(self):
-        self._consome(TokenType.ID)
+        identificador = self._consome(TokenType.ID)
+        tipo_variavel = self._buscar_variavel(identificador)
         self._consome(TokenType.ASSIGN)
-        self._expr()
+        tipo_expressao = self._expr()
+        self._verificar_tipos_compativeis(
+            tipo_variavel,
+            tipo_expressao,
+            identificador,
+            f"atribuicao de '{identificador.valor}'",
+        )
         self._consome(TokenType.SEMICOLON)
 
     def _return_stmt(self):
-        self._consome(TokenType.RETURN)
-        self._expr()
+        retorno = self._consome(TokenType.RETURN)
+        tipo_expressao = self._expr()
+        if self.tipo_retorno_atual is not None:
+            self._verificar_tipos_compativeis(
+                self.tipo_retorno_atual,
+                tipo_expressao,
+                retorno,
+                "return",
+            )
         self._consome(TokenType.SEMICOLON)
 
     def _print_stmt(self):
@@ -581,7 +739,7 @@ class Parser:
         self._stmt()
 
     def _expr(self):
-        self._rel_expr()
+        return self._rel_expr()
 
     REL_OPS = {
         TokenType.EQ, TokenType.NEQ, TokenType.LT,
@@ -589,90 +747,130 @@ class Parser:
     }
 
     def _rel_expr(self):
-        self._add_expr()
-        self._rel_expr_prime()
+        tipo_esquerdo = self._add_expr()
+        return self._rel_expr_prime(tipo_esquerdo)
 
-    def _rel_expr_prime(self):
+    def _rel_expr_prime(self, tipo_esquerdo: TokenType):
         if self.atual.tipo in self.REL_OPS:
-            self._rel_op()
-            self._add_expr()
+            operador = self._rel_op()
+            tipo_direito = self._add_expr()
+            self._tipo_operacao_numerica(tipo_esquerdo, tipo_direito, operador)
+            return TokenType.INT
+
+        return tipo_esquerdo
 
     def _rel_op(self):
         if self.atual.tipo in self.REL_OPS:
+            token = self.atual
             self.pos += 1
+            return token
         else:
             raise ErroSintatico(
                 f"Linha {self.atual.linha}: operador relacional esperado"
             )
 
     def _add_expr(self):
-        self._mul_expr()
-        self._add_expr_prime()
+        tipo = self._mul_expr()
+        return self._add_expr_prime(tipo)
 
-    def _add_expr_prime(self):
+    def _add_expr_prime(self, tipo_atual: TokenType):
         if self._verifica(TokenType.PLUS):
-            self._consome(TokenType.PLUS)
-            self._mul_expr()
-            self._add_expr_prime()
+            operador = self._consome(TokenType.PLUS)
+            tipo_direito = self._mul_expr()
+            tipo_resultado = self._tipo_operacao_numerica(tipo_atual, tipo_direito, operador)
+            return self._add_expr_prime(tipo_resultado)
         elif self._verifica(TokenType.MINUS):
-            self._consome(TokenType.MINUS)
-            self._mul_expr()
-            self._add_expr_prime()
+            operador = self._consome(TokenType.MINUS)
+            tipo_direito = self._mul_expr()
+            tipo_resultado = self._tipo_operacao_numerica(tipo_atual, tipo_direito, operador)
+            return self._add_expr_prime(tipo_resultado)
+
+        return tipo_atual
 
     def _mul_expr(self):
-        self._factor()
-        self._mul_expr_prime()
+        tipo = self._factor()
+        return self._mul_expr_prime(tipo)
 
-    def _mul_expr_prime(self):
+    def _mul_expr_prime(self, tipo_atual: TokenType):
         if self._verifica(TokenType.STAR):
-            self._consome(TokenType.STAR)
-            self._factor()
-            self._mul_expr_prime()
+            operador = self._consome(TokenType.STAR)
+            tipo_direito = self._factor()
+            tipo_resultado = self._tipo_operacao_numerica(tipo_atual, tipo_direito, operador)
+            return self._mul_expr_prime(tipo_resultado)
         elif self._verifica(TokenType.SLASH):
-            self._consome(TokenType.SLASH)
-            self._factor()
-            self._mul_expr_prime()
+            operador = self._consome(TokenType.SLASH)
+            tipo_direito = self._factor()
+            tipo_resultado = self._tipo_operacao_numerica(tipo_atual, tipo_direito, operador)
+            return self._mul_expr_prime(tipo_resultado)
+
+        return tipo_atual
 
     def _factor(self):
         if self._verifica(TokenType.LPAREN):
             self._consome(TokenType.LPAREN)
-            self._expr()
+            tipo = self._expr()
             self._consome(TokenType.RPAREN)
+            return tipo
         elif self._verifica(TokenType.ID):
-            self._consome(TokenType.ID)
-            self._factor_tail()
+            identificador = self._consome(TokenType.ID)
+            return self._factor_tail(identificador)
         elif self._verifica(TokenType.NUM):
-            self._consome(TokenType.NUM)
+            numero = self._consome(TokenType.NUM)
+            if "." in str(numero.valor):
+                return TokenType.FLOAT
+            return TokenType.INT
         else:
             raise ErroSintatico(
                 f"Linha {self.atual.linha}: fator inválido (token '{self.atual.tipo.name}')"
             )
 
-    def _factor_tail(self):
+    def _factor_tail(self, identificador: Token):
         if self._verifica(TokenType.LPAREN):
+            self._verificar_funcao_declarada(identificador)
             self._consome(TokenType.LPAREN)
-            self._arg_list_opt()
+            argumentos = self._arg_list_opt()
             self._consome(TokenType.RPAREN)
+            tipo_retorno, parametros = self.funcoes[identificador.valor]
+
+            if len(argumentos) != len(parametros):
+                raise ErroSintatico(
+                    f"Linha {identificador.linha}: funcao '{identificador.valor}' esperava {len(parametros)} argumento(s), recebeu {len(argumentos)}"
+                )
+
+            for indice, (esperado, recebido) in enumerate(zip(parametros, argumentos), start=1):
+                self._verificar_tipos_compativeis(
+                    esperado,
+                    recebido,
+                    identificador,
+                    f"argumento {indice} de '{identificador.valor}'",
+                )
+
+            return tipo_retorno
+
+        return self._buscar_variavel(identificador)
 
     def _arg_list_opt(self):
         if not self._verifica(TokenType.RPAREN):
-            self._arg_list()
+            return self._arg_list()
+
+        return []
 
     def _arg_list(self):
-        self._expr()
-        self._arg_list_prime()
+        argumentos = [self._expr()]
+        self._arg_list_prime(argumentos)
+        return argumentos
 
-    def _arg_list_prime(self):
+    def _arg_list_prime(self, argumentos: list[TokenType]):
         if self._verifica(TokenType.COMMA):
             self._consome(TokenType.COMMA)
-            self._expr()
-            self._arg_list_prime()
+            argumentos.append(self._expr())
+            self._arg_list_prime(argumentos)
 
     def _type(self):
         if self._verifica(TokenType.INT):
-            self._consome(TokenType.INT)
+            return self._consome(TokenType.INT).tipo
         elif self._verifica(TokenType.FLOAT):
-            self._consome(TokenType.FLOAT)
+            return self._consome(TokenType.FLOAT).tipo
         else:
             raise ErroSintatico(
                 f"Linha {self.atual.linha}: tipo esperado (int ou float), "
@@ -786,9 +984,9 @@ def exportar_tokens_json(tokens_codigos: list[int], lexemas: list[str | None], l
 # ─────────────────────────────────────────────
 
 def compilar(fonte: str, mostrar_tokens: bool = True):
-    print("═" * 50)
+    print("=" * 50)
     print("  COMPILADOR LangÇ#")
-    print("═" * 50)
+    print("=" * 50)
 
     print("\n[1] Análise Léxica...")
     try:
@@ -812,7 +1010,7 @@ def compilar(fonte: str, mostrar_tokens: bool = True):
         return tokens_codigos, lexemas, linhas, False
 
     print("\n  Compilação finalizada com sucesso!")
-    print("═" * 50)
+    print("=" * 50)
     return tokens_codigos, lexemas, linhas, True
 
 

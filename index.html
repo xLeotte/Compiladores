@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analise Sintatica LL(1)</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand-block">
+        <span class="eyebrow">Atividade de Compiladores</span>
+        <h1>Analise Sintatica LL(1)</h1>
+        <p>Resolucao da gramatica S -> cAa, com FIRST/FOLLOW, tabela parser e pilha para a sentenca cbca.</p>
+      </div>
+
+      <div class="diagram-panel" aria-label="Fluxo visual do analisador">
+        <svg viewBox="0 0 560 220" role="img" aria-labelledby="diagram-title diagram-desc">
+          <title id="diagram-title">Fluxo do parser LL(1)</title>
+          <desc id="diagram-desc">A pilha e a entrada consultam a tabela parser para escolher uma producao.</desc>
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z"></path>
+            </marker>
+          </defs>
+          <rect class="diagram-box box-stack" x="24" y="28" width="140" height="58" rx="8"></rect>
+          <text x="94" y="62" text-anchor="middle">Pilha</text>
+          <rect class="diagram-box box-input" x="24" y="132" width="140" height="58" rx="8"></rect>
+          <text x="94" y="166" text-anchor="middle">Entrada</text>
+          <rect class="diagram-box box-table" x="222" y="80" width="142" height="64" rx="8"></rect>
+          <text x="293" y="106" text-anchor="middle">Tabela M</text>
+          <text class="diagram-small" x="293" y="128" text-anchor="middle">topo, simbolo</text>
+          <rect class="diagram-box box-prod" x="414" y="80" width="122" height="64" rx="8"></rect>
+          <text x="475" y="107" text-anchor="middle">Producao</text>
+          <text class="diagram-small" x="475" y="129" text-anchor="middle">ou consome</text>
+          <path class="diagram-line" d="M164 57 C190 58 198 82 222 95"></path>
+          <path class="diagram-line" d="M164 160 C190 158 198 136 222 126"></path>
+          <path class="diagram-line" d="M364 112 L414 112"></path>
+          <path class="diagram-line diagram-return" d="M475 80 C452 25 269 18 136 28"></path>
+        </svg>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <section class="analysis-band" aria-labelledby="analysis-title">
+      <div class="control-panel">
+        <span class="section-kicker">Entrada</span>
+        <h2 id="analysis-title">Testar sentenca</h2>
+        <form id="sentence-form" class="sentence-form">
+          <label for="sentence-input">Sentenca</label>
+          <div class="input-row">
+            <input id="sentence-input" name="sentence" value="cbca" autocomplete="off" spellcheck="false">
+            <button class="primary-action" type="submit">Analisar</button>
+          </div>
+          <button class="secondary-action" id="example-button" type="button">Voltar para cbca</button>
+        </form>
+
+        <div class="grammar-list" aria-label="Producoes da gramatica">
+          <span class="section-kicker">Gramatica</span>
+          <div id="productions"></div>
+        </div>
+      </div>
+
+      <div class="result-panel">
+        <div class="result-topline">
+          <div>
+            <span class="section-kicker">Resultado</span>
+            <h2 id="result-title">Sentenca aceita</h2>
+          </div>
+          <span id="result-badge" class="result-badge accepted">Aceita</span>
+        </div>
+
+        <div class="summary-strip" id="summary-strip"></div>
+
+        <div class="derivation-block">
+          <div class="section-heading">
+            <span class="section-kicker">Derivacao</span>
+            <h3>Caminho aplicado</h3>
+          </div>
+          <div id="derivation-ribbon" class="derivation-ribbon"></div>
+        </div>
+
+        <div class="table-section">
+          <div class="section-heading">
+            <span class="section-kicker">Execucao</span>
+            <h3>Passos da analise</h3>
+          </div>
+          <div class="table-wrap">
+            <table id="steps-table"></table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="data-grid" aria-label="Tabelas da resolucao">
+      <div class="table-section">
+        <div class="section-heading">
+          <span class="section-kicker">Tabela</span>
+          <h3>FIRST e FOLLOW</h3>
+        </div>
+        <div class="table-wrap">
+          <table id="first-follow-table"></table>
+        </div>
+      </div>
+
+      <div class="table-section">
+        <div class="section-heading">
+          <span class="section-kicker">Tabela</span>
+          <h3>Parser LL(1)</h3>
+        </div>
+        <div class="table-wrap">
+          <table id="parser-table"></table>
+        </div>
+      </div>
+    </section>
+
+    <section class="table-section full-width">
+      <div class="section-heading">
+        <span class="section-kicker">Resolucao do PDF</span>
+        <h3>Pilha para cbca</h3>
+      </div>
+      <div class="table-wrap">
+        <table id="stack-table"></table>
+      </div>
+    </section>
+
+    <section class="support-band" aria-labelledby="support-title">
+      <div class="support-copy">
+        <span class="section-kicker">Material visual</span>
+        <h2 id="support-title">Apoio do projeto</h2>
+        <p>O site tambem deixa separado o automato salvo na pasta do trabalho, para consulta junto da resolucao sintatica.</p>
+      </div>
+      <figure class="support-image">
+        <img src="automato.jpg" alt="Automato do projeto de compiladores">
+      </figure>
+    </section>
+  </main>
+</body>
+</html>
