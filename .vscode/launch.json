@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Atividade sintatico - arquivo exemplo",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/atividade_sintatico.py",
+            "console": "integratedTerminal",
+            "args": [
+                "${workspaceFolder}/atividade_sintatico_exemplo.txt"
+            ]
+        },
+        {
+            "name": "Atividade sintatico - tokens",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/atividade_sintatico.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--tokens",
+                "${workspaceFolder}/atividade_sintatico_exemplo.txt"
+            ]
+        }
+    ]
+}
