@@ -5,21 +5,52 @@
             "name": "Atividade sintatico - arquivo exemplo",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/atividade_sintatico.py",
+            "program": "${workspaceFolder}/src/atividade_sintatico.py",
+            "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": [
-                "${workspaceFolder}/atividade_sintatico_exemplo.txt"
+                "${workspaceFolder}/examples/ll1/atividade_sintatico_exemplo.txt"
             ]
         },
         {
-            "name": "Atividade sintatico - tokens",
+            "name": "Atividade sintatico - entrada direta",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/atividade_sintatico.py",
+            "program": "${workspaceFolder}/src/atividade_sintatico.py",
+            "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "args": [
-                "--tokens",
-                "${workspaceFolder}/atividade_sintatico_exemplo.txt"
+                "cbca"
+            ]
+        },
+        {
+            "name": "Compilador LangC#",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/compilador.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Atividade semantico - erro const",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/atividade_semantico.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "${workspaceFolder}/examples/semantico/6_erro_semantico_const.txt"
+            ]
+        },
+        {
+            "name": "Atividade semantico - const ok",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/atividade_semantico.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": [
+                "${workspaceFolder}/examples/semantico/5_const_ok.txt"
             ]
         }
     ]

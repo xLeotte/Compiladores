@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relatorio LangC# - 5_const_ok.txt</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --ink: #1d252c;
+      --muted: #64707d;
+      --line: #d9e0e7;
+      --green: #23745a;
+      --red: #b94134;
+      --blue: #285e91;
+      --amber: #a96b16;
+      --soft-green: #e5f4ee;
+      --soft-red: #fde9e5;
+      --soft-blue: #e7f0fa;
+      --soft-amber: #fff2d9;
+      --shadow: 0 18px 45px rgba(29, 37, 44, 0.10);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    header {
+      background: #15251f;
+      color: #f8fbf8;
+      border-bottom: 6px solid var(--amber);
+    }
+
+    .header-inner {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 34px 0 30px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: end;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      margin-top: 8px;
+      font-size: clamp(2rem, 5vw, 4rem);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    h2 { font-size: 1.2rem; }
+
+    .eyebrow,
+    .section-label {
+      display: inline-flex;
+      color: var(--amber);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .file-name {
+      margin-top: 14px;
+      color: #cdd8d2;
+      font-family: Consolas, "Courier New", monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .status-badge {
+      min-width: 190px;
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-weight: 800;
+      text-align: center;
+      background: var(--soft-green);
+      color: var(--green);
+    }
+
+    .status-badge.erro {
+      background: var(--soft-red);
+      color: var(--red);
+    }
+
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 28px auto 48px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .metric,
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .metric {
+      padding: 18px;
+      min-height: 96px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 1.55rem;
+      line-height: 1.1;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      padding: 20px;
+      margin-bottom: 18px;
+      overflow: hidden;
+    }
+
+    .panel.alert {
+      border-color: #efb6ad;
+      background: var(--soft-red);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .code-box {
+      background: #101820;
+      color: #edf5f3;
+      border-radius: 8px;
+      overflow: auto;
+      max-height: 620px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92rem;
+    }
+
+    .code-line {
+      display: grid;
+      grid-template-columns: 54px minmax(0, 1fr);
+      min-height: 26px;
+    }
+
+    .line-number {
+      padding: 3px 12px;
+      color: #8da19a;
+      text-align: right;
+      border-right: 1px solid rgba(255,255,255,0.11);
+      user-select: none;
+    }
+
+    .line-text {
+      padding: 3px 14px;
+      white-space: pre;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 620px;
+      background: var(--surface);
+    }
+
+    th, td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      background: #f7f9fb;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    td {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.9rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 0.78rem;
+      font-weight: 800;
+    }
+
+    .pill.token {
+      background: var(--soft-blue);
+      color: var(--blue);
+    }
+
+    .pill.categoria {
+      background: var(--soft-amber);
+      color: var(--amber);
+    }
+
+    .empty {
+      color: var(--muted);
+      font-family: "Segoe UI", Arial, sans-serif;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .header-inner,
+      .layout,
+      .summary {
+        grid-template-columns: 1fr;
+      }
+
+      .status-badge {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div>
+        <span class="eyebrow">Relatorio do Compilador LangC#</span>
+        <h1>Compilacao aprovada</h1>
+        <p class="file-name">examples\langc\5_const_ok.txt</p>
+      </div>
+      <div class="status-badge ok">Analise concluida</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary" aria-label="Resumo da compilacao">
+      <div class="metric"><span>Status</span><strong>OK</strong></div>
+      <div class="metric"><span>Tokens</span><strong>26</strong></div>
+      <div class="metric"><span>Simbolos</span><strong>3</strong></div>
+      <div class="metric"><span>Linhas</span><strong>8</strong></div>
+    </section>
+
+    
+
+    <section class="layout">
+      <div>
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-label">Entrada</span>
+              <h2>Codigo-fonte</h2>
+            </div>
+          </div>
+          <div class="code-box"><div class="code-line"><span class="line-number">1</span><span class="line-text">const limite = 10;</span></div>
+<div class="code-line"><span class="line-number">2</span><span class="line-text">&nbsp;</span></div>
+<div class="code-line"><span class="line-number">3</span><span class="line-text">int main() {</span></div>
+<div class="code-line"><span class="line-number">4</span><span class="line-text">    int x;</span></div>
+<div class="code-line"><span class="line-number">5</span><span class="line-text">    x = limite;</span></div>
+<div class="code-line"><span class="line-number">6</span><span class="line-text">    print(x);</span></div>
+<div class="code-line"><span class="line-number">7</span><span class="line-text">    return 0;</span></div>
+<div class="code-line"><span class="line-number">8</span><span class="line-text">}</span></div></div>
+        </section>
+      </div>
+
+      <div>
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-label">Analise Lexica</span>
+              <h2>Tokens reconhecidos</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Token</th><th>Lexema</th><th>Codigo</th><th>Linha</th></tr></thead>
+              <tbody><tr><td>1</td><td><span class="pill token">CONST</span></td><td>const</td><td>28</td><td>1</td></tr>
+<tr><td>2</td><td><span class="pill token">ID</span></td><td>limite</td><td>8</td><td>1</td></tr>
+<tr><td>3</td><td><span class="pill token">ASSIGN</span></td><td>=</td><td>10</td><td>1</td></tr>
+<tr><td>4</td><td><span class="pill token">NUM</span></td><td>10</td><td>9</td><td>1</td></tr>
+<tr><td>5</td><td><span class="pill token">SEMICOLON</span></td><td>;</td><td>26</td><td>1</td></tr>
+<tr><td>6</td><td><span class="pill token">INT</span></td><td>int</td><td>1</td><td>3</td></tr>
+<tr><td>7</td><td><span class="pill token">ID</span></td><td>main</td><td>8</td><td>3</td></tr>
+<tr><td>8</td><td><span class="pill token">LPAREN</span></td><td>(</td><td>21</td><td>3</td></tr>
+<tr><td>9</td><td><span class="pill token">RPAREN</span></td><td>)</td><td>22</td><td>3</td></tr>
+<tr><td>10</td><td><span class="pill token">LBRACE</span></td><td>{</td><td>23</td><td>3</td></tr>
+<tr><td>11</td><td><span class="pill token">INT</span></td><td>int</td><td>1</td><td>4</td></tr>
+<tr><td>12</td><td><span class="pill token">ID</span></td><td>x</td><td>8</td><td>4</td></tr>
+<tr><td>13</td><td><span class="pill token">SEMICOLON</span></td><td>;</td><td>26</td><td>4</td></tr>
+<tr><td>14</td><td><span class="pill token">ID</span></td><td>x</td><td>8</td><td>5</td></tr>
+<tr><td>15</td><td><span class="pill token">ASSIGN</span></td><td>=</td><td>10</td><td>5</td></tr>
+<tr><td>16</td><td><span class="pill token">ID</span></td><td>limite</td><td>8</td><td>5</td></tr>
+<tr><td>17</td><td><span class="pill token">SEMICOLON</span></td><td>;</td><td>26</td><td>5</td></tr>
+<tr><td>18</td><td><span class="pill token">PRINT</span></td><td>print</td><td>7</td><td>6</td></tr>
+<tr><td>19</td><td><span class="pill token">LPAREN</span></td><td>(</td><td>21</td><td>6</td></tr>
+<tr><td>20</td><td><span class="pill token">ID</span></td><td>x</td><td>8</td><td>6</td></tr>
+<tr><td>21</td><td><span class="pill token">RPAREN</span></td><td>)</td><td>22</td><td>6</td></tr>
+<tr><td>22</td><td><span class="pill token">SEMICOLON</span></td><td>;</td><td>26</td><td>6</td></tr>
+<tr><td>23</td><td><span class="pill token">RETURN</span></td><td>return</td><td>6</td><td>7</td></tr>
+<tr><td>24</td><td><span class="pill token">NUM</span></td><td>0</td><td>9</td><td>7</td></tr>
+<tr><td>25</td><td><span class="pill token">SEMICOLON</span></td><td>;</td><td>26</td><td>7</td></tr>
+<tr><td>26</td><td><span class="pill token">RBRACE</span></td><td>}</td><td>24</td><td>8</td></tr>
+<tr><td>27</td><td><span class="pill token">EOF</span></td><td>$</td><td>27</td><td>9</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-label">Analise Semantica</span>
+              <h2>Tabela de simbolos</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Nome</th><th>Categoria</th><th>Tipo</th><th>Nivel</th><th>Linha</th></tr></thead>
+              <tbody><tr><td>1</td><td>limite</td><td><span class="pill categoria">constante</span></td><td>int</td><td>0</td><td>1</td></tr>
+<tr><td>2</td><td>main</td><td><span class="pill categoria">funcao</span></td><td>int</td><td>0</td><td>3</td></tr>
+<tr><td>3</td><td>x</td><td><span class="pill categoria">variavel</span></td><td>int</td><td>1</td><td>4</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

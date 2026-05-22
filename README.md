@@ -4,6 +4,7 @@ Projeto educacional com dois blocos principais:
 
 - `compilador.py`: analisador lexico e sintatico para a linguagem LangC#.
 - `atividade_sintatico.py` e `web/`: resolucao da atividade de analise sintatica LL(1).
+- `atividade_semantico.py`: resolucao separada da atividade de analise semantica.
 
 ## Estrutura
 
@@ -12,7 +13,8 @@ Compiladores/
 ├── README.md
 ├── src/
 │   ├── compilador.py
-│   └── atividade_sintatico.py
+│   ├── atividade_sintatico.py
+│   └── atividade_semantico.py
 ├── web/
 │   ├── index.html
 │   └── assets/
@@ -21,6 +23,7 @@ Compiladores/
 │       └── images/
 ├── examples/
 │   ├── langc/
+│   ├── semantico/
 │   └── ll1/
 ├── outputs/
 │   ├── cache/
@@ -36,6 +39,7 @@ Compiladores/
 - `src/`: codigos-fonte Python.
 - `web/`: pagina HTML da atividade LL(1), com CSS, JavaScript e imagens separados em `assets/`.
 - `examples/langc/`: arquivos `.txt` usados como entrada do compilador LangC#.
+- `examples/semantico/`: exemplos da atividade semantica com `const`.
 - `examples/ll1/`: exemplo de entrada da atividade sintatica LL(1).
 - `outputs/tokens/`: arquivos JSON gerados pelo analisador lexico.
 - `outputs/cache/`: caches gerados anteriormente pelo Python.
@@ -53,10 +57,24 @@ python src/compilador.py
 
 O programa lista os arquivos em `examples/langc/` e salva os tokens gerados em `outputs/tokens/`.
 
+O analisador tambem implementa a acao semantica de `const` descrita em `docs/activities/AcoesSemantico.pdf`: constantes globais entram na tabela de simbolos como categoria `constante` e nao podem receber nova atribuicao.
+
 Atividade sintatica LL(1):
 
 ```bash
 python src/atividade_sintatico.py examples/ll1/atividade_sintatico_exemplo.txt
+```
+
+Atividade semantica:
+
+```bash
+python src/atividade_semantico.py examples/semantico/6_erro_semantico_const.txt
+```
+
+Para validar um exemplo sem erro semantico:
+
+```bash
+python src/atividade_semantico.py examples/semantico/5_const_ok.txt
 ```
 
 Site da atividade:
@@ -71,4 +89,4 @@ Abra esse arquivo no navegador para usar a interface visual.
 
 - Nao ha dependencias externas obrigatorias.
 - `__pycache__/` e outros arquivos gerados podem ser recriados automaticamente pelo Python.
-- Os JSONs em `outputs/tokens/` representam saidas geradas a partir dos exemplos em `examples/langc/`.
+- Os JSONs em `outputs/tokens/` representam saidas geradas pelos scripts durante os testes.
