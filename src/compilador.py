@@ -1,10 +1,10 @@
 """
 Compilador / Analisador Léxico e Sintático
 Linguagem: LangÇ# (baseada na gramática fornecida)
-Manual de referência: manual_langç.pdf
+Manual de referência: docs/manuals/manual_langç.pdf
 
 Estrutura de transformação em um único arquivo:
-1. O programa localiza arquivos .txt na pasta do script.
+1. O programa localiza arquivos .txt em examples/langc.
 2. O usuário escolhe um arquivo por número.
 3. O Lexer lê o conteúdo e gera como estrutura principal três vetores paralelos:
    - tokens  -> códigos numéricos exatos dos tokens
@@ -20,6 +20,11 @@ Estrutura de transformação em um único arquivo:
 import json
 from pathlib import Path
 from enum import Enum
+
+
+RAIZ_PROJETO = Path(__file__).resolve().parent.parent
+PASTA_EXEMPLOS = RAIZ_PROJETO / "examples" / "langc"
+PASTA_TOKENS = RAIZ_PROJETO / "outputs" / "tokens"
 
 
 # ─────────────────────────────────────────────
@@ -882,8 +887,15 @@ class Parser:
 #  FUNÇÕES AUXILIARES DE ENTRADA/SAÍDA
 # ─────────────────────────────────────────────
 
-def obter_pasta_script() -> Path:
+def obter_pasta_entradas() -> Path:
+    if PASTA_EXEMPLOS.is_dir():
+        return PASTA_EXEMPLOS
+
     return Path(__file__).resolve().parent
+
+
+def obter_pasta_script() -> Path:
+    return obter_pasta_entradas()
 
 
 def listar_arquivos_txt(pasta: Path) -> list[Path]:
@@ -972,7 +984,8 @@ def exportar_tokens_json(tokens_codigos: list[int], lexemas: list[str | None], l
         "linhas": linhas_sem_eof,
     }
 
-    caminho_json = caminho_txt.with_name(f"{caminho_txt.stem}_tokens.json")
+    PASTA_TOKENS.mkdir(parents=True, exist_ok=True)
+    caminho_json = PASTA_TOKENS / f"{caminho_txt.stem}_tokens.json"
     with caminho_json.open('w', encoding='utf-8') as arquivo:
         json.dump(dados, arquivo, ensure_ascii=False, indent=2)
 
@@ -1015,11 +1028,11 @@ def compilar(fonte: str, mostrar_tokens: bool = True):
 
 
 if __name__ == "__main__":
-    pasta_script = obter_pasta_script()
-    arquivos_txt = listar_arquivos_txt(pasta_script)
+    pasta_entradas = obter_pasta_entradas()
+    arquivos_txt = listar_arquivos_txt(pasta_entradas)
 
     if not arquivos_txt:
-        print(f"Nenhum arquivo .txt encontrado na pasta do script: {pasta_script}")
+        print(f"Nenhum arquivo .txt encontrado na pasta de exemplos: {pasta_entradas}")
     else:
         arquivo_escolhido = escolher_arquivo(arquivos_txt)
         print(f"\nArquivo selecionado: {arquivo_escolhido.name}")
@@ -1033,6 +1046,6 @@ if __name__ == "__main__":
             if tokens_codigos is not None and lexemas is not None and linhas is not None:
                 try:
                     caminho_json = exportar_tokens_json(tokens_codigos, lexemas, linhas, arquivo_escolhido)
-                    print(f"\n[3] Tokens exportados em JSON: {caminho_json.name}")
+                    print(f"\n[3] Tokens exportados em JSON: {caminho_json.relative_to(RAIZ_PROJETO)}")
                 except OSError as e:
                     print(f"\n[3] Não foi possível exportar o JSON: {e}")

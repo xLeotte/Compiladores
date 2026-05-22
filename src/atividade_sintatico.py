@@ -2,7 +2,7 @@
 Atividade de Compiladores - Analise Sintatica LL(1)
 
 Resolucao baseada no arquivo:
-AtividadeSintatico - Pagina1.pdf
+docs/activities/AtividadeSintatico - Pagina1.pdf
 
 Gramatica:
 1-S -> cAa
