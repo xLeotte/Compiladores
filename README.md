@@ -2,7 +2,7 @@
 
 Projeto educacional com dois blocos principais:
 
-- `compilador.py`: analisador lexico e sintatico para a linguagem LangC#.
+- `compilador.py`: analisador lexico e analisador sintatico preditivo tabular para a linguagem LangC#.
 - `atividade_sintatico.py` e `web/`: resolucao da atividade de analise sintatica LL(1).
 - `atividade_semantico.py`: resolucao separada da atividade de analise semantica.
 
@@ -56,6 +56,13 @@ python src/compilador.py
 ```
 
 O programa lista os arquivos em `examples/langc/` e salva os tokens gerados em `outputs/tokens/`.
+Durante a analise, a saida mostra codigo do token, token, lexema, linha e a pilha do analisador sintatico a cada passo.
+
+As tabelas da E4 ficam em:
+
+```text
+docs/tabelas_e4.md
+```
 
 O analisador tambem implementa a acao semantica de `const` descrita em `docs/activities/AcoesSemantico.pdf`: constantes globais entram na tabela de simbolos como categoria `constante` e nao podem receber nova atribuicao.
 
