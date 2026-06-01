@@ -12,8 +12,8 @@ Estrutura de transformacao em um unico arquivo:
 4. Esses vetores sao usados diretamente para:
    - exibicao no terminal
    - exportacao JSON em outputs/tokens
-5. Para preservar o Parser sem reescrever sua logica, os vetores sao
-   convertidos localmente em objetos Token apenas antes da analise sintatica.
+5. Os vetores sao convertidos localmente em objetos Token antes da analise
+   sintatica tabular, que usa pilha explicita e tabela LL(1).
 """
 
 import json
@@ -299,17 +299,180 @@ def vetores_para_tokens(tokens_codigos: list[int], lexemas: list[str | None], li
 
 
 # ---------------------------------------------
-#  ANALISADOR SINTATICO (LL recursivo)
+#  ANALISADOR SINTATICO (descendente preditivo tabular)
 # ---------------------------------------------
 
 class Parser:
+    EPSILON = "epsilon"
+    FIM = "$"
+
+    PRODUCOES = {
+        1: ("PROGRAM", ["FUNCTION_LIST"]),
+        2: ("FUNCTION_LIST", ["FUNCTION", "FUNCTION_LIST_TAIL"]),
+        3: ("FUNCTION_LIST_TAIL", ["FUNCTION", "FUNCTION_LIST_TAIL"]),
+        4: ("FUNCTION_LIST_TAIL", []),
+        5: ("FUNCTION", ["TYPE", TokenType.ID, TokenType.LPAREN, "PARAM_LIST_OPT", TokenType.RPAREN, "BLOCK"]),
+        6: ("TYPE", [TokenType.INT]),
+        7: ("TYPE", [TokenType.FLOAT]),
+        8: ("PARAM_LIST_OPT", ["PARAM_LIST"]),
+        9: ("PARAM_LIST_OPT", []),
+        10: ("PARAM_LIST", ["PARAM", "PARAM_LIST_TAIL"]),
+        11: ("PARAM_LIST_TAIL", [TokenType.COMMA, "PARAM", "PARAM_LIST_TAIL"]),
+        12: ("PARAM_LIST_TAIL", []),
+        13: ("PARAM", ["TYPE", TokenType.ID]),
+        14: ("BLOCK", [TokenType.LBRACE, "DECL_LIST_OPT", "STMT_LIST_OPT", TokenType.RBRACE]),
+        15: ("DECL_LIST_OPT", ["DECL_LIST"]),
+        16: ("DECL_LIST_OPT", []),
+        17: ("DECL_LIST", ["VAR_DECL", "DECL_LIST_TAIL"]),
+        18: ("DECL_LIST_TAIL", ["VAR_DECL", "DECL_LIST_TAIL"]),
+        19: ("DECL_LIST_TAIL", []),
+        20: ("VAR_DECL", ["TYPE", TokenType.ID, TokenType.SEMICOLON]),
+        21: ("STMT_LIST_OPT", ["STMT_LIST"]),
+        22: ("STMT_LIST_OPT", []),
+        23: ("STMT_LIST", ["STMT", "STMT_LIST_TAIL"]),
+        24: ("STMT_LIST_TAIL", ["STMT", "STMT_LIST_TAIL"]),
+        25: ("STMT_LIST_TAIL", []),
+        26: ("STMT", ["ASSIGN_STMT"]),
+        27: ("STMT", ["IF_STMT"]),
+        28: ("STMT", ["WHILE_STMT"]),
+        29: ("STMT", ["PRINT_STMT"]),
+        30: ("STMT", ["RETURN_STMT"]),
+        31: ("STMT", ["BLOCK"]),
+        32: ("ASSIGN_STMT", [TokenType.ID, TokenType.ASSIGN, "EXPR", TokenType.SEMICOLON]),
+        33: ("RETURN_STMT", [TokenType.RETURN, "EXPR", TokenType.SEMICOLON]),
+        34: ("PRINT_STMT", [TokenType.PRINT, TokenType.LPAREN, "EXPR", TokenType.RPAREN, TokenType.SEMICOLON]),
+        35: ("IF_STMT", [TokenType.IF, TokenType.LPAREN, "EXPR", TokenType.RPAREN, "STMT", "ELSE_PART"]),
+        36: ("ELSE_PART", [TokenType.ELSE, "STMT"]),
+        37: ("ELSE_PART", []),
+        38: ("WHILE_STMT", [TokenType.WHILE, TokenType.LPAREN, "EXPR", TokenType.RPAREN, "STMT"]),
+        39: ("EXPR", ["REL_EXPR"]),
+        40: ("REL_EXPR", ["ADD_EXPR", "REL_EXPR_TAIL"]),
+        41: ("REL_EXPR_TAIL", ["REL_OP", "ADD_EXPR"]),
+        42: ("REL_EXPR_TAIL", []),
+        43: ("REL_OP", [TokenType.EQ]),
+        44: ("REL_OP", [TokenType.NEQ]),
+        45: ("REL_OP", [TokenType.LT]),
+        46: ("REL_OP", [TokenType.GT]),
+        47: ("REL_OP", [TokenType.LEQ]),
+        48: ("REL_OP", [TokenType.GEQ]),
+        49: ("ADD_EXPR", ["MUL_EXPR", "ADD_EXPR_TAIL"]),
+        50: ("ADD_EXPR_TAIL", [TokenType.PLUS, "MUL_EXPR", "ADD_EXPR_TAIL"]),
+        51: ("ADD_EXPR_TAIL", [TokenType.MINUS, "MUL_EXPR", "ADD_EXPR_TAIL"]),
+        52: ("ADD_EXPR_TAIL", []),
+        53: ("MUL_EXPR", ["FACTOR", "MUL_EXPR_TAIL"]),
+        54: ("MUL_EXPR_TAIL", [TokenType.STAR, "FACTOR", "MUL_EXPR_TAIL"]),
+        55: ("MUL_EXPR_TAIL", [TokenType.SLASH, "FACTOR", "MUL_EXPR_TAIL"]),
+        56: ("MUL_EXPR_TAIL", []),
+        57: ("FACTOR", [TokenType.LPAREN, "EXPR", TokenType.RPAREN]),
+        58: ("FACTOR", [TokenType.ID, "FACTOR_TAIL"]),
+        59: ("FACTOR", [TokenType.NUM]),
+        60: ("FACTOR_TAIL", [TokenType.LPAREN, "ARG_LIST_OPT", TokenType.RPAREN]),
+        61: ("FACTOR_TAIL", []),
+        62: ("ARG_LIST_OPT", ["ARG_LIST"]),
+        63: ("ARG_LIST_OPT", []),
+        64: ("ARG_LIST", ["EXPR", "ARG_LIST_TAIL"]),
+        65: ("ARG_LIST_TAIL", [TokenType.COMMA, "EXPR", "ARG_LIST_TAIL"]),
+        66: ("ARG_LIST_TAIL", []),
+    }
+
+    NAO_TERMINAIS = {esquerda for esquerda, _ in PRODUCOES.values()}
+
+    REL_OPS = {
+        TokenType.EQ, TokenType.NEQ, TokenType.LT,
+        TokenType.GT, TokenType.LEQ, TokenType.GEQ
+    }
+    FIRST_TYPE = {TokenType.INT, TokenType.FLOAT}
+    FIRST_STMT = {
+        TokenType.ID, TokenType.IF, TokenType.WHILE,
+        TokenType.PRINT, TokenType.RETURN, TokenType.LBRACE
+    }
+    FIRST_EXPR = {TokenType.LPAREN, TokenType.ID, TokenType.NUM}
+    FOLLOW_EXPR = {TokenType.RPAREN, TokenType.SEMICOLON, TokenType.COMMA}
+    FOLLOW_FACTOR = FOLLOW_EXPR | REL_OPS | {TokenType.PLUS, TokenType.MINUS, TokenType.STAR, TokenType.SLASH}
+
     def __init__(self, tokens: list[Token]):
         self.tokens = tokens
         self.pos = 0
+        self.tabela = self._criar_tabela()
 
     @property
     def atual(self) -> Token:
         return self.tokens[self.pos]
+
+    @classmethod
+    def _criar_tabela(cls):
+        tabela = {}
+
+        def add(nao_terminal, terminais, producao):
+            for terminal in terminais:
+                tabela[(nao_terminal, terminal)] = producao
+
+        add("PROGRAM", cls.FIRST_TYPE, 1)
+        add("FUNCTION_LIST", cls.FIRST_TYPE, 2)
+        add("FUNCTION_LIST_TAIL", cls.FIRST_TYPE, 3)
+        add("FUNCTION_LIST_TAIL", {TokenType.EOF}, 4)
+        add("FUNCTION", cls.FIRST_TYPE, 5)
+        add("TYPE", {TokenType.INT}, 6)
+        add("TYPE", {TokenType.FLOAT}, 7)
+        add("PARAM_LIST_OPT", cls.FIRST_TYPE, 8)
+        add("PARAM_LIST_OPT", {TokenType.RPAREN}, 9)
+        add("PARAM_LIST", cls.FIRST_TYPE, 10)
+        add("PARAM_LIST_TAIL", {TokenType.COMMA}, 11)
+        add("PARAM_LIST_TAIL", {TokenType.RPAREN}, 12)
+        add("PARAM", cls.FIRST_TYPE, 13)
+        add("BLOCK", {TokenType.LBRACE}, 14)
+        add("DECL_LIST_OPT", cls.FIRST_TYPE, 15)
+        add("DECL_LIST_OPT", cls.FIRST_STMT | {TokenType.RBRACE}, 16)
+        add("DECL_LIST", cls.FIRST_TYPE, 17)
+        add("DECL_LIST_TAIL", cls.FIRST_TYPE, 18)
+        add("DECL_LIST_TAIL", cls.FIRST_STMT | {TokenType.RBRACE}, 19)
+        add("VAR_DECL", cls.FIRST_TYPE, 20)
+        add("STMT_LIST_OPT", cls.FIRST_STMT, 21)
+        add("STMT_LIST_OPT", {TokenType.RBRACE}, 22)
+        add("STMT_LIST", cls.FIRST_STMT, 23)
+        add("STMT_LIST_TAIL", cls.FIRST_STMT, 24)
+        add("STMT_LIST_TAIL", {TokenType.RBRACE}, 25)
+        add("STMT", {TokenType.ID}, 26)
+        add("STMT", {TokenType.IF}, 27)
+        add("STMT", {TokenType.WHILE}, 28)
+        add("STMT", {TokenType.PRINT}, 29)
+        add("STMT", {TokenType.RETURN}, 30)
+        add("STMT", {TokenType.LBRACE}, 31)
+        add("ASSIGN_STMT", {TokenType.ID}, 32)
+        add("RETURN_STMT", {TokenType.RETURN}, 33)
+        add("PRINT_STMT", {TokenType.PRINT}, 34)
+        add("IF_STMT", {TokenType.IF}, 35)
+        add("ELSE_PART", {TokenType.ELSE}, 36)
+        add("ELSE_PART", cls.FIRST_STMT | {TokenType.RBRACE, TokenType.EOF}, 37)
+        add("WHILE_STMT", {TokenType.WHILE}, 38)
+        add("EXPR", cls.FIRST_EXPR, 39)
+        add("REL_EXPR", cls.FIRST_EXPR, 40)
+        add("REL_EXPR_TAIL", cls.REL_OPS, 41)
+        add("REL_EXPR_TAIL", cls.FOLLOW_EXPR, 42)
+        for terminal, producao in [
+            (TokenType.EQ, 43), (TokenType.NEQ, 44), (TokenType.LT, 45),
+            (TokenType.GT, 46), (TokenType.LEQ, 47), (TokenType.GEQ, 48),
+        ]:
+            add("REL_OP", {terminal}, producao)
+        add("ADD_EXPR", cls.FIRST_EXPR, 49)
+        add("ADD_EXPR_TAIL", {TokenType.PLUS}, 50)
+        add("ADD_EXPR_TAIL", {TokenType.MINUS}, 51)
+        add("ADD_EXPR_TAIL", cls.REL_OPS | cls.FOLLOW_EXPR, 52)
+        add("MUL_EXPR", cls.FIRST_EXPR, 53)
+        add("MUL_EXPR_TAIL", {TokenType.STAR}, 54)
+        add("MUL_EXPR_TAIL", {TokenType.SLASH}, 55)
+        add("MUL_EXPR_TAIL", {TokenType.PLUS, TokenType.MINUS} | cls.REL_OPS | cls.FOLLOW_EXPR, 56)
+        add("FACTOR", {TokenType.LPAREN}, 57)
+        add("FACTOR", {TokenType.ID}, 58)
+        add("FACTOR", {TokenType.NUM}, 59)
+        add("FACTOR_TAIL", {TokenType.LPAREN}, 60)
+        add("FACTOR_TAIL", cls.FOLLOW_FACTOR, 61)
+        add("ARG_LIST_OPT", cls.FIRST_EXPR, 62)
+        add("ARG_LIST_OPT", {TokenType.RPAREN}, 63)
+        add("ARG_LIST", cls.FIRST_EXPR, 64)
+        add("ARG_LIST_TAIL", {TokenType.COMMA}, 65)
+        add("ARG_LIST_TAIL", {TokenType.RPAREN}, 66)
+        return tabela
 
     def _simbolo_token(self, tipo: TokenType) -> str:
         simbolos = {
@@ -350,7 +513,27 @@ class Parser:
             return f"token {tok.tipo.name}"
         return f"{tok.valor!r}"
 
-    def _mensagem_erro_esperado(self, esperado: TokenType, encontrado: Token) -> str:
+    def _formatar_simbolo(self, simbolo) -> str:
+        if isinstance(simbolo, TokenType):
+            return self._simbolo_token(simbolo)
+        return str(simbolo)
+
+    def _formatar_pilha(self, pilha) -> str:
+        return " ".join(self._formatar_simbolo(s) for s in reversed(pilha))
+
+    def _formatar_producao(self, numero: int) -> str:
+        esquerda, direita = self.PRODUCOES[numero]
+        texto_direita = " ".join(self._formatar_simbolo(s) for s in direita) if direita else self.EPSILON
+        return f"{esquerda} -> {texto_direita}"
+
+    def _registrar_passo(self, passo: int, pilha, tok: Token, acao: str):
+        lexema = "$" if tok.tipo == TokenType.EOF else tok.valor
+        print(
+            f"{passo:<5} | {tok.tipo.value:<6} | {tok.tipo.name:<10} | "
+            f"{str(lexema):<12} | {tok.linha:<5} | {self._formatar_pilha(pilha):<55} | {acao}"
+        )
+
+    def _mensagem_erro_terminal(self, esperado: TokenType, encontrado: Token) -> str:
         anterior = self.tokens[self.pos - 1] if self.pos > 0 else encontrado
 
         if esperado == TokenType.SEMICOLON:
@@ -359,28 +542,24 @@ class Parser:
                 f"antes de {self._formatar_token_encontrado(encontrado)} "
                 f"(linha {encontrado.linha})"
             )
-
         if esperado == TokenType.RPAREN:
             return (
                 f"Linha {anterior.linha}: faltou ')' antes de "
                 f"{self._formatar_token_encontrado(encontrado)} "
                 f"(linha {encontrado.linha})"
             )
-
         if esperado == TokenType.RBRACE:
             return (
                 f"Linha {anterior.linha}: faltou '}}' antes de "
                 f"{self._formatar_token_encontrado(encontrado)} "
                 f"(linha {encontrado.linha})"
             )
-
         if esperado == TokenType.LPAREN:
             return (
                 f"Linha {anterior.linha}: faltou '(' apos "
                 f"{self._formatar_token_encontrado(anterior)}"
             )
-
-        if esperado == TokenType.ID and anterior.tipo in (TokenType.INT, TokenType.FLOAT):
+        if esperado == TokenType.ID and anterior.tipo in self.FIRST_TYPE:
             return (
                 f"Linha {encontrado.linha}: esperado identificador apos o tipo "
                 f"{self._formatar_token_encontrado(anterior)}, "
@@ -392,284 +571,60 @@ class Parser:
             f"encontrado {self._formatar_token_encontrado(encontrado)}"
         )
 
-    def _consome(self, tipo: TokenType) -> Token:
-        tok = self.atual
-        if tok.tipo != tipo:
-            raise ErroSintatico(self._mensagem_erro_esperado(tipo, tok))
-        self.pos += 1
-        return tok
-
-    def _verifica(self, *tipos: TokenType) -> bool:
-        return self.atual.tipo in tipos
-
-    def _primeiro_tipo(self):
-        return self._verifica(TokenType.INT, TokenType.FLOAT)
-
-    def _primeiro_stmt(self):
-        return self._verifica(
-            TokenType.ID,
-            TokenType.IF,
-            TokenType.WHILE,
-            TokenType.PRINT,
-            TokenType.RETURN,
-            TokenType.LBRACE,
+    def _mensagem_erro_tabela(self, nao_terminal: str, encontrado: Token) -> str:
+        esperados = sorted(
+            {
+                self._simbolo_token(terminal)
+                for nt, terminal in self.tabela
+                if nt == nao_terminal
+            }
+        )
+        lista = ", ".join(esperados) if esperados else "nenhum token valido"
+        return (
+            f"Linha {encontrado.linha}: erro sintatico em {nao_terminal}; "
+            f"encontrado {self._formatar_token_encontrado(encontrado)}. "
+            f"Esperado um de: {lista}"
         )
 
     def programa(self):
-        self._function_list()
-        self._consome(TokenType.EOF)
+        pilha = [TokenType.EOF, "PROGRAM"]
+        passo = 1
+
+        print("\nTabela de analise sintatica (execucao tabular):")
+        print("Passo | CodTok | Token      | Lexema       | Linha | Pilha                                                   | Acao")
+        print("-" * 116)
+
+        while pilha:
+            topo = pilha[-1]
+            tok = self.atual
+
+            if isinstance(topo, TokenType):
+                if topo != tok.tipo:
+                    raise ErroSintatico(self._mensagem_erro_terminal(topo, tok))
+
+                self._registrar_passo(passo, pilha, tok, f"Consome {self._simbolo_token(topo)}")
+                pilha.pop()
+                self.pos += 1
+                passo += 1
+                continue
+
+            numero_producao = self.tabela.get((topo, tok.tipo))
+            if numero_producao is None:
+                raise ErroSintatico(self._mensagem_erro_tabela(topo, tok))
+
+            self._registrar_passo(
+                passo,
+                pilha,
+                tok,
+                f"Usa {numero_producao}: {self._formatar_producao(numero_producao)}",
+            )
+            pilha.pop()
+            _, direita = self.PRODUCOES[numero_producao]
+            for simbolo in reversed(direita):
+                pilha.append(simbolo)
+            passo += 1
+
         print("OK  Analise sintatica concluida sem erros.")
-
-    def _function_list(self):
-        self._function()
-        self._function_list_prime()
-
-    def _function_list_prime(self):
-        if self._primeiro_tipo():
-            self._function()
-            self._function_list_prime()
-
-    def _function(self):
-        self._type()
-        self._consome(TokenType.ID)
-
-        if self._verifica(TokenType.SEMICOLON):
-            raise ErroSintatico(
-                f"Linha {self.atual.linha}: declaracao global de variavel nao e permitida; esperado 'LPAREN'"
-            )
-
-        self._consome(TokenType.LPAREN)
-        self._param_list_opt()
-        self._consome(TokenType.RPAREN)
-        self._block()
-
-    def _param_list_opt(self):
-        if self._primeiro_tipo():
-            self._param_list()
-
-    def _param_list(self):
-        self._param()
-        self._param_list_prime()
-
-    def _param_list_prime(self):
-        if self._verifica(TokenType.COMMA):
-            self._consome(TokenType.COMMA)
-            self._param()
-            self._param_list_prime()
-
-    def _param(self):
-        self._type()
-        self._consome(TokenType.ID)
-
-    def _block(self):
-        self._consome(TokenType.LBRACE)
-        self._decl_list_opt()
-        self._stmt_list_opt()
-
-        if self._primeiro_tipo():
-            raise ErroSintatico(
-                f"Linha {self.atual.linha}: declaracao nao permitida apos statements no bloco"
-            )
-
-        self._consome(TokenType.RBRACE)
-
-    def _decl_list_opt(self):
-        if self._primeiro_tipo():
-            self._decl_list()
-
-    def _lookahead_decl(self) -> bool:
-        i = self.pos
-        if i >= len(self.tokens):
-            return False
-        if self.tokens[i].tipo not in (TokenType.INT, TokenType.FLOAT):
-            return False
-        i += 1
-        if i >= len(self.tokens):
-            return False
-        return self.tokens[i].tipo == TokenType.ID
-
-    def _decl_list(self):
-        self._var_decl()
-        self._decl_list_prime()
-
-    def _decl_list_prime(self):
-        if self._primeiro_tipo():
-            self._var_decl()
-            self._decl_list_prime()
-
-    def _var_decl(self):
-        self._type()
-        self._consome(TokenType.ID)
-        self._consome(TokenType.SEMICOLON)
-
-    def _stmt_list_opt(self):
-        if self._primeiro_stmt():
-            self._stmt_list()
-
-    def _stmt_list(self):
-        self._stmt()
-        self._stmt_list_prime()
-
-    def _stmt_list_prime(self):
-        if self._primeiro_stmt():
-            self._stmt()
-            self._stmt_list_prime()
-
-    def _stmt(self):
-        t = self.atual.tipo
-        if t == TokenType.ID:
-            self._assign_stmt()
-        elif t == TokenType.IF:
-            self._if_stmt()
-        elif t == TokenType.WHILE:
-            self._while_stmt()
-        elif t == TokenType.PRINT:
-            self._print_stmt()
-        elif t == TokenType.RETURN:
-            self._return_stmt()
-        elif t == TokenType.LBRACE:
-            self._block()
-        else:
-            raise ErroSintatico(
-                f"Linha {self.atual.linha}: statement invalido (token '{t.name}')"
-            )
-
-    def _assign_stmt(self):
-        self._consome(TokenType.ID)
-        self._consome(TokenType.ASSIGN)
-        self._expr()
-        self._consome(TokenType.SEMICOLON)
-
-    def _return_stmt(self):
-        self._consome(TokenType.RETURN)
-        self._expr()
-        self._consome(TokenType.SEMICOLON)
-
-    def _print_stmt(self):
-        self._consome(TokenType.PRINT)
-        self._consome(TokenType.LPAREN)
-        self._expr()
-        self._consome(TokenType.RPAREN)
-        self._consome(TokenType.SEMICOLON)
-
-    def _if_stmt(self):
-        self._consome(TokenType.IF)
-        self._consome(TokenType.LPAREN)
-        self._expr()
-        self._consome(TokenType.RPAREN)
-        self._stmt()
-        self._else_part()
-
-    def _else_part(self):
-        if self._verifica(TokenType.ELSE):
-            self._consome(TokenType.ELSE)
-            self._stmt()
-
-    def _while_stmt(self):
-        self._consome(TokenType.WHILE)
-        self._consome(TokenType.LPAREN)
-        self._expr()
-        self._consome(TokenType.RPAREN)
-        self._stmt()
-
-    def _expr(self):
-        self._rel_expr()
-
-    REL_OPS = {
-        TokenType.EQ, TokenType.NEQ, TokenType.LT,
-        TokenType.GT, TokenType.LEQ, TokenType.GEQ
-    }
-
-    def _rel_expr(self):
-        self._add_expr()
-        self._rel_expr_prime()
-
-    def _rel_expr_prime(self):
-        if self.atual.tipo in self.REL_OPS:
-            self._rel_op()
-            self._add_expr()
-
-    def _rel_op(self):
-        if self.atual.tipo in self.REL_OPS:
-            self.pos += 1
-        else:
-            raise ErroSintatico(
-                f"Linha {self.atual.linha}: operador relacional esperado"
-            )
-
-    def _add_expr(self):
-        self._mul_expr()
-        self._add_expr_prime()
-
-    def _add_expr_prime(self):
-        if self._verifica(TokenType.PLUS):
-            self._consome(TokenType.PLUS)
-            self._mul_expr()
-            self._add_expr_prime()
-        elif self._verifica(TokenType.MINUS):
-            self._consome(TokenType.MINUS)
-            self._mul_expr()
-            self._add_expr_prime()
-
-    def _mul_expr(self):
-        self._factor()
-        self._mul_expr_prime()
-
-    def _mul_expr_prime(self):
-        if self._verifica(TokenType.STAR):
-            self._consome(TokenType.STAR)
-            self._factor()
-            self._mul_expr_prime()
-        elif self._verifica(TokenType.SLASH):
-            self._consome(TokenType.SLASH)
-            self._factor()
-            self._mul_expr_prime()
-
-    def _factor(self):
-        if self._verifica(TokenType.LPAREN):
-            self._consome(TokenType.LPAREN)
-            self._expr()
-            self._consome(TokenType.RPAREN)
-        elif self._verifica(TokenType.ID):
-            self._consome(TokenType.ID)
-            self._factor_tail()
-        elif self._verifica(TokenType.NUM):
-            self._consome(TokenType.NUM)
-        else:
-            raise ErroSintatico(
-                f"Linha {self.atual.linha}: fator invalido (token '{self.atual.tipo.name}')"
-            )
-
-    def _factor_tail(self):
-        if self._verifica(TokenType.LPAREN):
-            self._consome(TokenType.LPAREN)
-            self._arg_list_opt()
-            self._consome(TokenType.RPAREN)
-
-    def _arg_list_opt(self):
-        if not self._verifica(TokenType.RPAREN):
-            self._arg_list()
-
-    def _arg_list(self):
-        self._expr()
-        self._arg_list_prime()
-
-    def _arg_list_prime(self):
-        if self._verifica(TokenType.COMMA):
-            self._consome(TokenType.COMMA)
-            self._expr()
-            self._arg_list_prime()
-
-    def _type(self):
-        if self._verifica(TokenType.INT):
-            self._consome(TokenType.INT)
-        elif self._verifica(TokenType.FLOAT):
-            self._consome(TokenType.FLOAT)
-        else:
-            raise ErroSintatico(
-                f"Linha {self.atual.linha}: tipo esperado (int ou float), "
-                f"encontrado '{self.atual.tipo.name}'"
-            )
 
 
 # ---------------------------------------------
@@ -736,16 +691,21 @@ def mostrar_tabela_tokens(tokens_codigos: list[int], lexemas: list[str | None], 
     nomes = [TokenType(codigo).name for codigo, _, _ in registros]
     lexemas_formatados = ["" if lexema is None else str(lexema) for _, lexema, _ in registros]
 
+    largura_codigo = max(len("CODIGO"), max(len(str(codigo)) for codigo, _, _ in registros))
     largura_token = max(len("TOKEN"), max(len(nome) for nome in nomes))
     largura_lexema = max(len("LEXEMA"), max(len(lex) for lex in lexemas_formatados))
 
-    cabecalho = f"{'TOKEN':<{largura_token}} | {'LEXEMA':<{largura_lexema}} | LINHA"
+    cabecalho = (
+        f"{'CODIGO':<{largura_codigo}} | "
+        f"{'TOKEN':<{largura_token}} | "
+        f"{'LEXEMA':<{largura_lexema}} | LINHA"
+    )
     print("\n" + cabecalho)
     print("-" * len(cabecalho))
 
     for (codigo, lexema, linha), nome in zip(registros, nomes):
         lexema_texto = "" if lexema is None else str(lexema)
-        print(f"{nome:<{largura_token}} | {lexema_texto:<{largura_lexema}} | {linha}")
+        print(f"{codigo:<{largura_codigo}} | {nome:<{largura_token}} | {lexema_texto:<{largura_lexema}} | {linha}")
 
 
 def exportar_tokens_json(tokens_codigos: list[int], lexemas: list[str | None], linhas: list[int], caminho_txt: Path) -> Path:
